@@ -1,7 +1,5 @@
 package com.spmisvt.codeservey.utils;
 
-import com.spmisvt.codeservey.controller.Result;
-
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -35,6 +33,8 @@ public class DockerWorker {
             response.add(result);
         }
         if (process.waitFor() != 0) {
+            BufferedReader bufferedReader = process.errorReader();
+            System.out.println(bufferedReader);
             throw new IOException();
         }
         return response;
