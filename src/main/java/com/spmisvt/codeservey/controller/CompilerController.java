@@ -1,5 +1,6 @@
 package com.spmisvt.codeservey.controller;
 
+import com.spmisvt.codeservey.utils.DockerWorker;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestPart;
@@ -17,7 +18,7 @@ import java.util.List;
 @Slf4j
 public class CompilerController {
     @PostMapping("python")
-    public List<Result> pythonCompiler(@RequestPart(value = "sourceCode", required = false) MultipartFile sourceCode) {
+    public List<String> pythonCompiler(@RequestPart(value = "sourceCode", required = false) MultipartFile sourceCode) throws RuntimeException {
         String folder = "DockerFiles";
         createEntrypointForPython(folder);
         try {
@@ -25,16 +26,16 @@ public class CompilerController {
         } catch (IOException ex) {
             log.error(ex.getMessage());
         }
-
-        String dockerImageName = "compiler" + new Date().getTime();
+        String dockerImageName = String.format("compiler-id-%s", new Date().getTime());
         log.info("Build docker image");
 
-        String[] buildCommand = new String[] {"docker", "image", "build", folder, "-t", dockerImageName};
+        DockerWorker docker = new DockerWorker(dockerImageName);
+
+        boolean status;
 
         try {
-            ProcessBuilder processBuilder = new ProcessBuilder(buildCommand);
-            Process processBuild = processBuilder.start();
-            if (processBuild.waitFor() == 0) {
+            status = docker.createImage(folder);
+            if (status) {
                 log.info("docker image created");
             } else {
                 log.error("Error creating docker image");
@@ -43,35 +44,19 @@ public class CompilerController {
             throw new RuntimeException(e);
         }
 
-        List<Result> response= new ArrayList<>();
+        List<String> response;
 
         log.info("running docker");
         try {
-            String[] runCommand = new String[] {"docker", "run", "--rm", dockerImageName};
-            ProcessBuilder processRunner = new ProcessBuilder(runCommand);
-            Process runner = processRunner.start();
-
-            BufferedReader reader = new BufferedReader(new InputStreamReader(runner.getInputStream()));
-            String result = null;
-            while((result = reader.readLine()) != null) {
-                response.add(new Result(result));
-            }
-
-            if (runner.waitFor() == 0) {
-                log.info("docker container running");
-            } else {
-                log.error("Error running docker container");
-            }
+           response = docker.runImage();
         } catch (IOException | InterruptedException e) {
             throw new RuntimeException(e);
         }
 
         log.info("delete docker image");
         try {
-            String[] runCommand = new String[] {"docker", "rmi", "-f", dockerImageName};
-            ProcessBuilder processDeleter = new ProcessBuilder(runCommand);
-            Process runner = processDeleter.start();
-            if (runner.waitFor() == 0) {
+            status = docker.deleteImage();
+            if (status) {
                 log.info("docker container deleting");
             } else {
                 log.error("Error deleting docker container");
